@@ -11,6 +11,14 @@ const fetch = require('node-fetch');
 const admin = require('firebase-admin');
 
 // ---------------------------------------------------------------------------
+// BINANCE PROXY
+// Back4App blocks direct calls to fapi.binance.com. Set BINANCE_PROXY_URL
+// to your Cloudflare Worker URL (e.g. https://binance-proxy.yourname.workers.dev)
+// to route all Binance requests through it. Falls back to direct if not set.
+// ---------------------------------------------------------------------------
+const BINANCE_BASE = (process.env.BINANCE_PROXY_URL || 'https://fapi.binance.com').replace(/\/$/, '');
+
+// ---------------------------------------------------------------------------
 // FIREBASE SETUP
 // Credentials come from an environment variable (set on Render), never from
 // a committed file. FIREBASE_SERVICE_ACCOUNT should contain the *entire*
@@ -166,7 +174,7 @@ function pushTerminalLog(tag, info) {
 // ---------------------------------------------------------------------------
 async function loadFullFuturesSymbolUniverse() {
   try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/exchangeInfo');
+    const response = await fetch(`${BINANCE_BASE}/fapi/v1/exchangeInfo`);
     if (!response.ok) throw new Error("exchangeInfo fetch failed.");
     const data = await response.json();
     const liveUsdtPerpetuals = (data.symbols || [])
@@ -188,7 +196,7 @@ async function loadFullFuturesSymbolUniverse() {
 
 async function updateLivePricesFromPublicFuturesAPI() {
   try {
-    const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/price');
+    const response = await fetch(`${BINANCE_BASE}/fapi/v1/ticker/price`);
     if (!response.ok) throw new Error("API stream lag.");
     const data = await response.json();
     data.forEach(item => {
@@ -204,7 +212,7 @@ async function refreshAllCandleHistories() {
   for (let i = 0; i < tradeAssetWatchlist.length; i++) {
     const symbol = tradeAssetWatchlist[i];
     try {
-      const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=100`;
+      const url = `${BINANCE_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=100`;
       const response = await fetch(url);
       if (!response.ok) continue;
       const raw = await response.json();
