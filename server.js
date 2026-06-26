@@ -11,14 +11,6 @@ const fetch = require('node-fetch');
 const admin = require('firebase-admin');
 
 // ---------------------------------------------------------------------------
-// BINANCE PROXY
-// Back4App blocks direct calls to fapi.binance.com. Set BINANCE_PROXY_URL
-// to your Cloudflare Worker URL (e.g. https://binance-proxy.yourname.workers.dev)
-// to route all Binance requests through it. Falls back to direct if not set.
-// ---------------------------------------------------------------------------
-const BINANCE_BASE = (process.env.BINANCE_PROXY_URL || 'https://fapi.binance.com').replace(/\/$/, '');
-
-// ---------------------------------------------------------------------------
 // FIREBASE SETUP
 // Credentials come from an environment variable (set on Render), never from
 // a committed file. FIREBASE_SERVICE_ACCOUNT should contain the *entire*
@@ -170,41 +162,79 @@ function pushTerminalLog(tag, info) {
 }
 
 // ---------------------------------------------------------------------------
-// BINANCE DATA FETCHING
+// MARKET DATA FETCHING
+// Uses api.binance.com (spot, not futures) which is accessible from Back4App.
+// Prices and candles are equivalent for simulation/scanning purposes.
 // ---------------------------------------------------------------------------
+
+// CoinGecko symbol map for price fallback
+const COINGECKO_IDS = {
+  BTCUSDT: 'bitcoin', ETHUSDT: 'ethereum', SOLUSDT: 'solana',
+  BNBUSDT: 'binancecoin', XRPUSDT: 'ripple', AVAXUSDT: 'avalanche-2',
+  ADAUSDT: 'cardano', DOGEUSDT: 'dogecoin', MATICUSDT: 'matic-network',
+  DOTUSDT: 'polkadot', LTCUSDT: 'litecoin', LINKUSDT: 'chainlink',
+  UNIUSDT: 'uniswap', ATOMUSDT: 'cosmos', FILUSDT: 'filecoin'
+};
+
 async function loadFullFuturesSymbolUniverse() {
   try {
-    const response = await fetch(`${BINANCE_BASE}/fapi/v1/exchangeInfo`);
+    // Use spot exchangeInfo — accessible from Back4App
+    const response = await fetch('https://api.binance.com/api/v3/exchangeInfo', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
     if (!response.ok) throw new Error("exchangeInfo fetch failed.");
     const data = await response.json();
-    const liveUsdtPerpetuals = (data.symbols || [])
-      .filter(s => s.contractType === 'PERPETUAL' && s.status === 'TRADING' && s.quoteAsset === 'USDT')
+    const liveUsdtPairs = (data.symbols || [])
+      .filter(s => s.status === 'TRADING' && s.quoteAsset === 'USDT')
       .map(s => s.symbol);
 
-    if (liveUsdtPerpetuals.length > 0) {
+    if (liveUsdtPairs.length > 0) {
       const majors = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT'];
-      const rest = liveUsdtPerpetuals.filter(s => !majors.includes(s));
-      tradeAssetWatchlist = [...majors.filter(m => liveUsdtPerpetuals.includes(m)), ...rest].slice(0, MAX_SCAN_UNIVERSE_SIZE);
+      const rest = liveUsdtPairs.filter(s => !majors.includes(s));
+      tradeAssetWatchlist = [...majors.filter(m => liveUsdtPairs.includes(m)), ...rest].slice(0, MAX_SCAN_UNIVERSE_SIZE);
       fullSymbolUniverseLoaded = true;
-      pushTerminalLog("UNIVERSE", `Loaded ${liveUsdtPerpetuals.length} live USDT-margined perpetual futures from Binance. Actively scanning top ${tradeAssetWatchlist.length} by priority.`);
+      pushTerminalLog("UNIVERSE", `Loaded ${liveUsdtPairs.length} live USDT pairs from Binance spot. Actively scanning top ${tradeAssetWatchlist.length} by priority.`);
     }
   } catch (err) {
     console.warn("Could not load full symbol universe, using fallback watchlist.", err.message);
-    pushTerminalLog("UNIVERSE", "Could not reach Binance exchangeInfo endpoint. Falling back to a 7-coin default watchlist.");
+    pushTerminalLog("UNIVERSE", "Could not reach Binance exchangeInfo endpoint. Falling back to 7-coin default watchlist.");
   }
 }
 
 async function updateLivePricesFromPublicFuturesAPI() {
   try {
-    const response = await fetch(`${BINANCE_BASE}/fapi/v1/ticker/price`);
-    if (!response.ok) throw new Error("API stream lag.");
+    // Try Binance spot ticker first
+    const response = await fetch('https://api.binance.com/api/v3/ticker/price', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    if (!response.ok) throw new Error("Binance spot ticker failed.");
     const data = await response.json();
+    let updated = 0;
     data.forEach(item => {
       if (tradeAssetWatchlist.includes(item.symbol)) {
         runtimeLivePrices[item.symbol] = parseFloat(item.price);
+        updated++;
       }
     });
-  } catch (err) { console.warn("Futures price feed delay.", err.message); }
+    if (updated === 0) throw new Error("No matching symbols in response.");
+  } catch (err) {
+    // Fallback: CoinGecko free API
+    try {
+      const ids = tradeAssetWatchlist
+        .map(s => COINGECKO_IDS[s]).filter(Boolean).join(',');
+      if (!ids) return;
+      const cgRes = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
+      if (!cgRes.ok) throw new Error("CoinGecko also failed.");
+      const cgData = await cgRes.json();
+      Object.entries(COINGECKO_IDS).forEach(([symbol, id]) => {
+        if (cgData[id] && tradeAssetWatchlist.includes(symbol)) {
+          runtimeLivePrices[symbol] = cgData[id].usd;
+        }
+      });
+    } catch (cgErr) {
+      console.warn("Futures price feed delay.", cgErr.message);
+    }
+  }
 }
 
 async function refreshAllCandleHistories() {
@@ -212,8 +242,9 @@ async function refreshAllCandleHistories() {
   for (let i = 0; i < tradeAssetWatchlist.length; i++) {
     const symbol = tradeAssetWatchlist[i];
     try {
-      const url = `${BINANCE_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=100`;
-      const response = await fetch(url);
+      // Use Binance spot klines — same format, accessible from Back4App
+      const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=100`;
+      const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       if (!response.ok) continue;
       const raw = await response.json();
       candleHistoryStore[symbol] = raw.map(c => ({
