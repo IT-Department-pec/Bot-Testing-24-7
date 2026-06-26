@@ -1,0 +1,17 @@
+{
+  "name": "scalper-engine",
+  "version": "1.0.0",
+  "description": "24/7 shared crypto futures scalping simulator (paper trading) with Firebase-backed shared state",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
+    "node-fetch": "^2.7.0"
+  }
+}
