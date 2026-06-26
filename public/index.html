@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Futures Bot v6.9 · Rapid Scalping Terminal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg-main: #04060a;
+    --bg-side: #090c12;
+    --bg-surface: #0e121a;
+    --bg-surface-elevated: #141a26;
+    --border-color: #1a2233;
+    --color-accent: #2563eb;
+    --color-green: #10b981;
+    --color-green-glow: rgba(16, 185, 129, 0.1);
+    --color-red: #ef4444;
+    --color-red-glow: rgba(239, 68, 68, 0.1);
+    --color-yellow: #eab308;
+    --color-text: #f1f5f9;
+    --color-muted: #64748b;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { max-width: 100%; overflow-x: hidden; }
+  body {
+    background-color: var(--bg-main);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* GATEKEEPER INITIALIZATION DESIGN */
+  .init-overlay-modal {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(2, 3, 5, 0.96); display: flex; align-items: center; justify-content: center; z-index: 5000;
+    padding: 16px; overflow-y: auto;
+  }
+  .init-card {
+    background-color: var(--bg-surface); border: 1px solid var(--border-color);
+    width: 460px; max-width: 100%; border-radius: 12px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    max-height: 92vh; overflow-y: auto;
+  }
+
+  /* WORKSPACE STRUCTURE */
+  .sidebar-container {
+    width: 280px; flex-shrink: 0; background-color: var(--bg-side); border-right: 1px solid var(--border-color);
+    display: flex; flex-direction: column; height: 100%; overflow-y: auto;
+  }
+  .main-workspace { flex: 1; display: flex; flex-direction: column; height: 100%; overflow: hidden; min-width: 0; }
+
+  .mobile-menu-toggle {
+    display: none; background: var(--bg-surface-elevated); border: 1px solid var(--border-color);
+    color: #fff; border-radius: 6px; width: 36px; height: 36px; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0; font-size: 16px;
+  }
+  .sidebar-backdrop { display: none; }
+
+  .top-status-bar {
+    height: 54px; background-color: var(--bg-side); border-bottom: 1px solid var(--border-color);
+    padding: 0 24px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 10px;
+  }
+  .top-status-bar .status-cluster { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-weight: 600; flex-wrap: wrap; min-width: 0; }
+
+  .sidebar-section { padding: 16px; border-bottom: 1px solid var(--border-color); }
+  .sidebar-heading { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-muted); margin-bottom: 12px; }
+  
+  .nav-menu { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .nav-item {
+    padding: 10px 12px; border-radius: 6px; cursor: pointer; color: var(--color-muted);
+    font-weight: 500; display: flex; align-items: center; gap: 10px; transition: all 0.2s;
+  }
+  .nav-item:hover { background-color: var(--bg-surface); color: #fff; }
+  .nav-item.active { background-color: var(--color-accent); color: #fff; font-weight: 600; }
+
+  .control-group { margin-bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
+  .control-label { font-size: 11px; color: var(--color-muted); font-weight: 500; }
+  .control-field {
+    background-color: var(--bg-surface); border: 1px solid var(--border-color);
+    color: #fff; font-family: var(--font-mono); padding: 8px; border-radius: 4px; outline: none; width: 100%;
+    font-size: 13px;
+  }
+
+  /* CORE VIEWS */
+  .view-pane { display: none; padding: 24px; flex: 1; overflow-y: auto; overflow-x: hidden; min-width: 0; }
+  .view-pane.active { display: flex; flex-direction: column; gap: 20px; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .card-metric { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; min-width: 0; }
+  .metric-head { font-size: 11px; text-transform: uppercase; color: var(--color-muted); font-weight: 600; margin-bottom: 6px; }
+  .metric-body { font-size: 22px; font-family: var(--font-mono); font-weight: 700; color: #fff; word-break: break-word; }
+
+  .table-panel { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; width: 100%; max-width: 100%; }
+  .table-header-title { padding: 14px 20px; background-color: rgba(0,0,0,0.2); font-weight: 700; color: #fff; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  
+  .table-scroll-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; min-width: 640px; border-collapse: collapse; text-align: left; }
+  th { padding: 12px 20px; font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--color-muted); border-bottom: 1px solid var(--border-color); background-color: rgba(0,0,0,0.05); white-space: nowrap; }
+  td { padding: 12px 20px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+
+  .trend-long { background-color: var(--color-green-glow); color: var(--color-green); border: 1px solid rgba(16,185,129,0.2); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .trend-short { background-color: var(--color-red-glow); color: var(--color-red); border: 1px solid rgba(239,68,68,0.2); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .green-text { color: var(--color-green); font-weight: 600; }
+  .red-text { color: var(--color-red); font-weight: 600; }
+
+  .btn { padding: 8px 16px; border-radius: 4px; border: none; font-weight: 600; cursor: pointer; font-family: var(--font-sans); transition: all 0.2s; white-space: nowrap; }
+  .btn-success { background-color: var(--color-green); color: #fff; }
+  .btn-danger { background-color: var(--color-red); color: #fff; }
+  .btn-secondary { background-color: var(--bg-surface-elevated); color: var(--color-text); border: 1px solid var(--border-color); }
+  
+  .daily-summary-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 12px 20px; background: rgba(0,0,0,0.15); border-bottom: 1px solid var(--border-color); }
+
+  /* OVERLAY VIEWPORTS */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 0; }
+  .modal-frame { background: var(--bg-surface); border: 1px solid var(--border-color); width: 92vw; height: 85vh; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-frame .modal-body-row { display: flex; flex: 1; height: calc(100% - 50px); overflow: hidden; }
+  .modal-frame .modal-body-row .chart-pane { flex: 2; height: 100%; background: #000; min-width: 0; }
+  .modal-frame .modal-body-row .audit-pane { flex: 1; border-left: 1px solid var(--border-color); background: var(--bg-side); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; min-width: 240px; }
+
+  /* ============================================================
+     RESPONSIVE BREAKPOINTS — full device coverage
+     Desktop  : >1100px  — full sidebar always visible
+     Tablet   : 600–1100px — sidebar becomes slide-in drawer
+     Phone    : 380–600px  — compact layout, stacked grids
+     Tiny     : <380px   — ultra-compact, single column everything
+  ============================================================ */
+
+  /* Tablet and below: sidebar becomes a slide-in drawer */
+  @media (max-width: 1100px) {
+    .mobile-menu-toggle { display: flex; }
+
+    .sidebar-container {
+      position: fixed; top: 0; left: 0; height: 100vh; z-index: 2000;
+      transform: translateX(-100%); transition: transform 0.28s cubic-bezier(.4,0,.2,1);
+      width: 82vw; max-width: 300px;
+      box-shadow: 12px 0 40px rgba(0,0,0,0.6);
+    }
+    .sidebar-container.mobile-open { transform: translateX(0); }
+
+    .sidebar-backdrop { display: none; }
+    .sidebar-backdrop.mobile-open {
+      display: block; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.65); z-index: 1500;
+      backdrop-filter: blur(2px);
+    }
+
+    .top-status-bar { padding: 0 12px; gap: 8px; }
+    .view-pane { padding: 14px; gap: 14px; }
+
+    .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .daily-summary-bar { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; }
+
+    /* 2-col grids → stacked on tablet */
+    .two-col-grid { grid-template-columns: 1fr !important; }
+
+    .modal-frame { width: 100vw; height: 100vh; border-radius: 0; }
+    .modal-frame .modal-body-row { flex-direction: column; height: calc(100% - 50px); }
+    .modal-frame .modal-body-row .chart-pane { flex: none; height: 45vh; }
+    .modal-frame .modal-body-row .audit-pane {
+      flex: 1; border-left: none; border-top: 1px solid var(--border-color);
+      min-width: 0; padding: 14px; gap: 12px;
+    }
+
+    /* Status bar text shortened */
+    #engine-status-text { display: none; }
+    #engine-status-short { display: inline !important; }
+  }
+
+  /* Phone */
+  @media (max-width: 600px) {
+    body { font-size: 11.5px; }
+
+    .top-status-bar { height: 48px; padding: 0 10px; gap: 6px; }
+    .view-pane { padding: 10px; gap: 10px; }
+
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .card-metric { padding: 12px; }
+    .metric-body { font-size: 16px; }
+    .metric-head { font-size: 10px; }
+
+    .daily-summary-bar { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+
+    .table-header-title { padding: 10px 12px; font-size: 12px; flex-direction: column; align-items: flex-start; }
+    th { padding: 9px 10px; font-size: 9px; }
+    td { padding: 9px 10px; font-size: 11px; }
+
+    .init-card { padding: 14px; }
+    .btn { padding: 7px 10px; font-size: 11px; }
+    #master-switch-node { font-size: 11px; padding: 6px 10px; }
+
+    /* Scanner table: hide pattern column on phone, keep essentials */
+    .scanner-col-pattern { display: none; }
+
+    /* Ledger: collapse some columns */
+    .ledger-col-notional { display: none; }
+  }
+
+  /* Tiny phones (≤380px) */
+  @media (max-width: 380px) {
+    body { font-size: 11px; }
+    .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .metric-body { font-size: 14px; }
+    .daily-summary-bar { grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; }
+    .view-pane { padding: 8px; gap: 8px; }
+    th { padding: 7px 8px; font-size: 9px; }
+    td { padding: 7px 8px; font-size: 10px; }
+    .top-status-bar { height: 44px; }
+    .btn { padding: 5px 8px; font-size: 10px; }
+    #master-switch-node { font-size: 10px; padding: 5px 8px; }
+    .card-metric { padding: 10px; }
+    .metric-head { font-size: 9px; }
+  }
+
+  /* Landscape phone — give more horizontal room */
+  @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+    .top-status-bar { height: 40px; }
+    .view-pane { padding: 8px; gap: 8px; }
+    .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .card-metric { padding: 10px; }
+    .metric-body { font-size: 14px; }
+    .modal-frame .modal-body-row .chart-pane { height: 55vh; }
+    .modal-frame .modal-body-row { flex-direction: row; }
+    .modal-frame .modal-body-row .audit-pane { border-left: 1px solid var(--border-color); border-top: none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="init-overlay-modal" id="gatekeeper-modal">
+    <div class="init-card">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <span style="background: var(--color-accent); color: white; padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 10px; font-weight: 700;">5-10 MIN MODE</span>
+        <h3 style="font-family: var(--font-mono); font-size: 15px; color:#fff;">LIGHTNING SCALPER SETUP</h3>
+      </div>
+      <p style="color: var(--color-muted); font-size: 11px; margin-bottom: 18px;">Configured to auto-target micro price actions for hyper-speed completion cycles.</p>
+      
+      <div class="control-group">
+        <label class="control-label">Max Concurrent Scalp Contracts</label>
+        <input type="number" class="control-field" id="init-max-trades" value="4" min="1" max="10">
+      </div>
+      <div class="control-group">
+        <label class="control-label">Target Leverage Coefficient (High Leverage = Faster Target Hits)</label>
+        <input type="number" class="control-field" id="init-leverage" value="50" min="1" max="125" oninput="calculateHighVelocityTargets()">
+      </div>
+      <div class="control-group">
+        <label class="control-label">Profit Targets Management Strategy</label>
+        <select class="control-field" id="init-target-mode" onchange="toggleTargetInputFields(this.value)">
+          <option value="auto100" selected>Target Fast 100% ROE (Auto-Scale Price Delta)</option>
+          <option value="manual">Manual Micro Percentage Target</option>
+        </select>
+      </div>
+      
+      <div id="manual-percentage-inputs-wrapper" style="display:none; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Take Profit Target %</label>
+          <input type="number" class="control-field" id="init-manual-tp" value="0.4" step="0.05">
+        </div>
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Stop Loss Target %</label>
+          <input type="number" class="control-field" id="init-manual-sl" value="0.2" step="0.05">
+        </div>
+      </div>
+
+      <div class="control-group" id="auto-roe-explainer" style="background: rgba(16,185,129,0.06); padding: 10px; border: 1px dashed rgba(16,185,129,0.3); border-radius: 6px; margin-bottom: 12px;">
+        <span style="color: var(--color-green); font-weight: 600; font-family: var(--font-mono);">5-10 Minute Velocity Vector:</span>
+        <div style="font-size:11px; color: var(--color-muted); margin-top:2px;" id="auto-roe-text">-</div>
+      </div>
+
+      <div class="control-group">
+        <label class="control-label">Timeframe Horizon Anchor</label>
+        <input type="text" class="control-field" id="init-timeframe" value="1m default (changeable live from the sidebar after start)" readonly style="color: var(--color-yellow); opacity: 0.85;">
+      </div>
+
+      <button class="btn btn-success" style="width: 100%; margin-top: 15px; padding: 12px;" onclick="commitGatekeeperConfigurations()">Deploy High-Frequency Engine</button>
+    </div>
+  </div>
+
+  <aside class="sidebar-container" id="sidebar-container">
+    <div class="sidebar-section" style="background: rgba(0,0,0,0.15);">
+      <div style="font-family: var(--font-mono); font-weight:700; font-size:13px; color:#fff;">SCALPER ENGINE <span style="color:var(--color-accent);">v6.9</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-heading">Navigation Dashboard</div>
+      <nav class="nav-menu">
+        <div class="nav-item active" data-target="pane-dashboard" onclick="switchActiveViewPort(this)">Live Market Feed</div>
+        <div class="nav-item" data-target="pane-positions" onclick="switchActiveViewPort(this)">Active Risk Matrix</div>
+        <div class="nav-item" data-target="pane-daily-ledger" onclick="switchActiveViewPort(this)">Daily Trade History</div>
+        <div class="nav-item" data-target="pane-strategy-intelligence" onclick="switchActiveViewPort(this)">Strategy Intelligence</div>
+        <div class="nav-item" data-target="pane-best-trades" onclick="switchActiveViewPort(this)">Average Best Trades Detail</div>
+        <div class="nav-item" data-target="pane-market-news" onclick="switchActiveViewPort(this)">Market News & Sentiment</div>
+        <div class="nav-item" data-target="pane-logs" onclick="switchActiveViewPort(this)">System Telemetry</div>
+      </nav>
+    </div>
+
+    <div class="sidebar-section" style="background: rgba(37,99,235,0.05);">
+      <div class="sidebar-heading">Live Engine Controls (Adjustable While Running)</div>
+      <div class="control-group">
+        <label class="control-label">Leverage (applies to next new positions)</label>
+        <input type="number" class="control-field" id="live-leverage" min="1" max="125" value="50" onchange="applyLiveLeverageChange(this.value)">
+      </div>
+      <div class="control-group">
+        <label class="control-label">Max Concurrent Open Positions</label>
+        <input type="number" class="control-field" id="live-max-trades" min="1" max="20" value="4" onchange="applyLiveMaxTradesChange(this.value)">
+      </div>
+      <div class="control-group">
+        <label class="control-label">Active Scan Timeframe</label>
+        <select class="control-field" id="live-timeframe" onchange="applyLiveTimeframeChange(this.value)">
+          <option value="1m">1 Minute</option>
+          <option value="3m">3 Minutes</option>
+          <option value="5m">5 Minutes</option>
+          <option value="15m">15 Minutes</option>
+          <option value="30m">30 Minutes</option>
+          <option value="1h">1 Hour</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1; background: rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 15px;">
+      <div>
+        <div class="sidebar-heading">Locked Fast-Scalp Profiles</div>
+        <div style="display:flex; flex-direction:column; gap:8px; font-family:var(--font-mono); font-size:11px; color:#94a3b8;">
+          <div>Max Limits: <span id="side-lbl-max" style="color:#fff; font-weight:600;">-</span></div>
+          <div>Leverage Level: <span id="side-lbl-lev" style="color:#fff; font-weight:600;">-</span></div>
+          <div>Timeframe Sync: <span id="side-lbl-tf" style="color:var(--color-yellow); font-weight:600;">1m</span></div>
+          <div>Symbol Universe: <span id="side-lbl-universe" style="color:#3b82f6; font-weight:600;">Loading...</span></div>
+        </div>
+      </div>
+      <div style="border-top: 1px dashed var(--border-color); padding-top: 12px;">
+        <div class="sidebar-heading">Micro Delta Margins (Default For New Trades)</div>
+        <div style="display:flex; flex-direction:column; gap:8px; font-family:var(--font-mono); font-size:11px; color:#94a3b8;">
+          <div>Take Profit: <span id="side-lbl-tp" class="green-text" style="font-weight:600;">-</span></div>
+          <div>Stop Loss: <span id="side-lbl-sl" class="red-text" style="font-weight:600;">-</span></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile sidebar backdrop -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeMobileSidebar()"></div>
+
+  <main class="main-workspace">
+    <header class="top-status-bar">
+      <div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1;">
+        <!-- Hamburger — shown on tablet/phone, hidden on desktop -->
+        <button class="mobile-menu-toggle" id="mobile-menu-btn" onclick="openMobileSidebar()" aria-label="Open menu">☰</button>
+        <div class="status-pulse" id="engine-hardware-pulse" style="width:8px; height:8px; border-radius:50%; background:#ef4444; flex-shrink:0;"></div>
+        <span id="engine-status-text" style="font-family:var(--font-mono); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">HIGH-FREQUENCY RADAR: OFFLINE</span>
+        <!-- Short label shown only on mobile (hidden by default) -->
+        <span id="engine-status-short" style="display:none; font-family:var(--font-mono); font-weight:600; font-size:11px; color:var(--color-muted);">TF: <span id="top-bar-tf-short" style="color:var(--color-yellow);">1m</span></span>
+        <span style="color:var(--color-muted); font-weight:500; display:none;" class="tf-sep">|</span>
+        <span style="color:var(--color-yellow); font-family:var(--font-mono); font-weight:600; white-space:nowrap;" id="tf-label-desktop">TF: <span id="top-bar-tf">1m</span></span>
+      </div>
+      <button class="btn btn-success" id="master-switch-node" onclick="toggleEngineCoreCycle()" style="flex-shrink:0;">▶ Start</button>
+    </header>
+
+    <section class="view-pane active" id="pane-dashboard">
+      <div class="stats-grid">
+        <div class="card-metric"><div class="metric-head">Equity Pool Cash</div><div class="metric-body" id="dash-balance">$10,000.00</div></div>
+        <div class="card-metric"><div class="metric-head">Realized Yield Delta</div><div class="metric-body" id="dash-pnl">+$0.00</div></div>
+        <div class="card-metric"><div class="metric-head">Historical Win Rate</div><div class="metric-body" id="dash-winrate">0.0%</div></div>
+        <div class="card-metric"><div class="metric-head">Risk Capacity Bound</div><div class="metric-body" id="dash-occupancy">0 / 0</div></div>
+      </div>
+
+      <div class="table-panel">
+        <div class="table-header-title">1-Minute Asymmetric Scanner Pipeline (High-Velocity Asset Scanning)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Asset Identifier</th>
+              <th>Market Price</th>
+              <th>Technical Momentum Indicators (80%)</th>
+              <th class="scanner-col-pattern">Chart Pattern Engine (20%)</th>
+              <th>Recommendation Engine Index Status</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-scanner-tbody">
+            <tr><td colspan="5" style="text-align:center; color:var(--color-muted); padding:30px;">Awaiting terminal configuration handshake variables...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="view-pane" id="pane-positions">
+      <div class="table-panel" style="overflow:hidden;">
+        <div class="table-header-title" style="flex-wrap:wrap; gap:8px;">
+          <span>Open Exposure Position Desk</span>
+          <span style="font-size:11px; color:var(--color-muted); font-weight:400;">← Scroll table horizontally to see all columns →</span>
+          <span id="pos-count-badge" style="font-family:var(--font-mono); font-size:11px; background:rgba(37,99,235,0.15); color:#60a5fa; padding:2px 8px; border-radius:10px;">0 open</span>
+        </div>
+        <div class="table-scroll-wrap" style="overflow-x:auto; -webkit-overflow-scrolling:touch; max-height:70vh; overflow-y:auto;">
+          <table style="min-width:1100px;">
+            <thead style="position:sticky; top:0; z-index:10; background:var(--bg-surface);">
+              <tr>
+                <th style="min-width:110px;">Asset</th>
+                <th style="min-width:110px;">Direction</th>
+                <th style="min-width:100px;">Entry Price</th>
+                <th style="min-width:120px;">Current Price</th>
+                <th style="min-width:100px;">Hold Time</th>
+                <th style="min-width:160px;">Margin / Notional / Qty</th>
+                <th style="min-width:160px;">Unrealized P&L</th>
+                <th style="min-width:220px;">TP / SL Targets</th>
+                <th style="min-width:190px; text-align:center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="positions-detailed-tbody">
+              <tr><td colspan="8" style="text-align:center; color:var(--color-muted); padding: 30px;">No open positions. Start the engine to begin scanning for entries.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="view-pane" id="pane-daily-ledger">
+      <div style="display:flex; flex-direction:column; gap:16px;" id="daily-ledger-canvas-container"></div>
+    </section>
+
+    <section class="view-pane" id="pane-strategy-intelligence">
+      <div class="card-metric" style="background:var(--bg-surface); line-height:1.6; margin-bottom:10px;">
+        <h3 style="color:#fff; margin-bottom:6px; font-size:13px;">Asymmetric Core Dynamic Learning Array Model Matrix</h3>
+        <p style="color:var(--color-muted); font-size:11px;">
+          The system balances entry optimization by enforcing an 80% absolute indicator weight bias paired alongside a secondary 20% validation pipeline derived from patterns represented in visual graphics layers like `three-black-crows-pattern-7.webp` and `images.jpg`.
+        </p>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;" class="two-col-grid">
+          <table>
+            <thead><tr><th>Technical Metric Profile</th><th>Success Velocity</th><th>Weight Focus Value</th></tr></thead>
+            <tbody id="matrix-signals-tbody"></tbody>
+          </table>
+        </div>
+        <div class="table-panel">
+          <div class="table-header-title">Chart Structural Patterns Engine (20% Total Base Share)</div>
+          <table>
+            <thead><tr><th>Pattern Structural ID</th><th>Success Velocity</th><th>Weight Focus Value</th></tr></thead>
+            <tbody id="matrix-patterns-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-panel" style="margin-top:4px;">
+        <div class="table-header-title">Machine Optimization Explanatory Rationale Core</div>
+        <div style="padding:20px; background:rgba(0,0,0,0.1); line-height:1.6; font-family:var(--font-mono); font-size:11px; color:#a7f3d0;" id="intelligence-rationale-box">
+          Aggregating data arrays to form execution analytics profiles...
+        </div>
+      </div>
+    </section>
+
+    <section class="view-pane" id="pane-best-trades">
+      <div class="card-metric" style="background:var(--bg-surface); line-height:1.6; margin-bottom:10px;">
+        <h3 style="color:#fff; margin-bottom:6px; font-size:13px;">Average Best Trades Detail</h3>
+        <p style="color:var(--color-muted); font-size:11px;" id="best-trades-status-text">
+          Awaiting at least 20 completed trades before generating the best-indicator breakdown. Progress: <b id="best-trades-progress-count">0</b> / 20 trades.
+        </p>
+      </div>
+
+      <div id="best-trades-summary-wrap" style="display:none; flex-direction:column; gap:16px;">
+        <div class="stats-grid" id="best-trades-stats-grid"></div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;" class="two-col-grid">
+            <table>
+              <thead><tr><th>Indicator</th><th>Win Rate</th><th>Trades Won / Total</th><th>Verdict</th></tr></thead>
+              <tbody id="best-indicators-tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-panel">
+            <div class="table-header-title">Top Performing Chart Patterns</div>
+            <table>
+              <thead><tr><th>Pattern</th><th>Win Rate</th><th>Trades Won / Total</th><th>Verdict</th></tr></thead>
+              <tbody id="best-patterns-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-panel">
+          <div class="table-header-title">Best-Performing Trade Batches Recap (Every 20 Trades)</div>
+          <table>
+            <thead><tr><th>Batch</th><th>Trades Covered</th><th>Win Rate</th><th>Net PnL</th><th>Best Indicator</th><th>Best Pattern</th></tr></thead>
+            <tbody id="best-batches-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="view-pane" id="pane-market-news">
+      <div class="card-metric" style="background:var(--bg-surface); line-height:1.6; margin-bottom:4px;">
+        <h3 style="color:#fff; margin-bottom:6px; font-size:13px;">Market News & Sentiment</h3>
+        <p style="color:var(--color-muted); font-size:11px;">
+          Research aid only — not wired into the trading engine. Social sentiment signals (Telegram/X "alpha" calls) are excluded by design as they are common pump-and-dump vectors. Click any link below to open news in a new tab.
+        </p>
+      </div>
+
+      <!-- Coin-specific news links -->
+      <div class="table-panel">
+        <div class="table-header-title" style="flex-wrap:wrap; gap:10px;">
+          <span>📰 Live Coverage For</span>
+          <select class="control-field" id="news-symbol-select" style="width:180px; padding:6px 10px;" onchange="renderNewsTabLinksForSymbol(this.value)"></select>
+        </div>
+        <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px;" id="news-source-links">
+          <div style="color:var(--color-muted); font-size:12px; padding:10px;">Select a coin above to load news sources...</div>
+        </div>
+      </div>
+
+      <!-- On-chain / derivatives sentiment section (actually useful) -->
+      <div class="table-panel">
+        <div class="table-header-title">📊 On-Chain & Derivatives Sentiment (Reliable Signals)</div>
+        <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:10px;">
+          <a href="https://www.coinglass.com/FundingRate" target="_blank" rel="noopener noreferrer" class="news-link-card" style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+            <span style="color:var(--color-green); font-weight:700; font-size:12px;">📈 Coinglass — Funding Rates</span>
+            <span style="color:var(--color-muted); font-size:11px;">Real-time funding rates across all major exchanges. Extreme positive = overheated longs, negative = oversold shorts.</span>
+          </a>
+          <a href="https://www.coinglass.com/LiquidationData" target="_blank" rel="noopener noreferrer" class="news-link-card" style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+            <span style="color:var(--color-green); font-weight:700; font-size:12px;">💣 Coinglass — Liquidation Heatmap</span>
+            <span style="color:var(--color-muted); font-size:11px;">Where leveraged positions will get blown out. Key levels act as price magnets.</span>
+          </a>
+          <a href="https://www.coinglass.com/OpenInterest" target="_blank" rel="noopener noreferrer" class="news-link-card" style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+            <span style="color:var(--color-green); font-weight:700; font-size:12px;">🔍 Coinglass — Open Interest</span>
+            <span style="color:var(--color-muted); font-size:11px;">Rising OI + rising price = strong trend. Rising OI + falling price = bear dominance.</span>
+          </a>
+          <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank" rel="noopener noreferrer" class="news-link-card" style="background:rgba(234,179,8,0.06); border:1px solid rgba(234,179,8,0.2); border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+            <span style="color:var(--color-yellow); font-weight:700; font-size:12px;">😱 Fear & Greed Index</span>
+            <span style="color:var(--color-muted); font-size:11px;">Extreme fear = potential reversal to upside. Extreme greed = caution on longs.</span>
+          </a>
+          <a href="https://www.binance.com/en/futures/funding-history" target="_blank" rel="noopener noreferrer" class="news-link-card" style="background:rgba(37,99,235,0.06); border:1px solid rgba(37,99,235,0.2); border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+            <span style="color:#60a5fa; font-weight:700; font-size:12px;">💰 Binance Futures Funding History</span>
+            <span style="color:var(--color-muted); font-size:11px;">Official Binance funding rate history — cross-check with Coinglass.</span>
+          </a>
+          <a href="https://coinmarketcap.com/gainers-losers/" target="_blank" rel="noopener noreferrer" class="news-link-card" style="background:rgba(37,99,235,0.06); border:1px solid rgba(37,99,235,0.2); border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+            <span style="color:#60a5fa; font-weight:700; font-size:12px;">🚀 CMC — Today's Top Movers</span>
+            <span style="color:var(--color-muted); font-size:11px;">Biggest gainers/losers in 24h. Momentum coins often continue short-term.</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- News aggregators -->
+      <div class="table-panel">
+        <div class="table-header-title">🗞️ Reputable News Sources (General Market Coverage)</div>
+        <div style="padding:16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:10px;" id="news-general-links"></div>
+      </div>
+
+      <div class="card-metric" style="background: rgba(239,68,68,0.05); border-color: rgba(239,68,68,0.3);">
+        <div class="metric-head" style="color:var(--color-red);">⚠️ A Note on Telegram / X ("Twitter") Signal Groups</div>
+        <p style="color:var(--color-muted); font-size:11px; line-height:1.6;">
+          Many Telegram/X "crypto signal" channels are paid pump groups or outright scams — they often post a buy call, dump
+          their own pre-bought bags into the volume their followers create, then move on. Treat any unverified group call
+          as adversarial by default. Prefer on-chain/derivatives data (funding rates, open interest, liquidation clusters)
+          and statements directly from project teams/exchanges over anonymous group chats.
+        </p>
+      </div>
+    </section>
+
+    <section class="view-pane" id="pane-logs">
+      <div class="table-panel" style="flex:1; display:flex; flex-direction:column;">
+        <div class="table-header-title">System Execution Telemetry Stream Logging Feed</div>
+        <div id="console-stream-box" style="padding:16px; background:#010204; font-family:var(--font-mono); font-size:11px; overflow-y:auto; flex:1; line-height:1.7;">
+          [BOOTLOADER] Core structures bound. Provide configuration variables to unlock real-time diagnostic systems...
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-overlay" id="chart-viewport-modal" onclick="dismissModalViewport()">
+    <div class="modal-frame" onclick="event.stopPropagation()">
+      <div style="padding:14px 20px; background: var(--bg-side); border-bottom: 1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+        <span id="modal-chart-heading" style="font-family:var(--font-mono); font-weight:700; color:#fff;">Structural Execution Frame</span>
+        <button class="btn btn-danger" style="padding:4px 12px; font-size:11px;" onclick="dismissModalViewport()">Dismiss Blueprint</button>
+      </div>
+      <div style="display:flex; flex:1; height:calc(100% - 50px); overflow:hidden;">
+        <div style="flex:2; height:100%; background:#000;" id="iframe-mount-target"></div>
+        <div style="flex:1; border-left:1px solid var(--border-color); background:var(--bg-side); padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:16px;">
+          <h3 style="font-size:13px; padding-bottom:8px; border-bottom:1px solid var(--border-color);">Execution Confluence Audit</h3>
+          
+          <div class="card-metric" style="background:var(--bg-surface); display:flex; flex-direction:column; gap:6px; font-family:var(--font-mono); font-size:11px;">
+            <div>Entry Execution Level: <span id="bp-entry" style="color:#fff;">-</span></div>
+            <div>Take Profit Target: <span id="bp-tp" class="green-text">-</span></div>
+            <div>Stop-Loss Anchor: <span id="bp-sl" class="red-text">-</span></div>
+          </div>
+
+          <div class="card-metric" style="background:rgba(37,99,235,0.06); border: 1px solid rgba(37,99,235,0.25);">
+            <div style="font-size:10px; text-transform:uppercase; color:#60a5fa; margin-bottom:6px; font-weight:700; letter-spacing: 0.05em;">Engine Validation: Why This Trade Was Taken</div>
+            <div id="bp-trade-reasons" style="line-height:1.6; font-size:11px; color:#e2e8f0; font-family: var(--font-mono);">
+              -
+            </div>
+          </div>
+
+          <div class="card-metric" style="background:var(--bg-surface);">
+            <div style="font-size:10px; text-transform:uppercase; color:var(--color-muted); margin-bottom:4px; font-weight:700;">80/20 Combined Confluence Metadata</div>
+            <div id="bp-convergences" style="line-height:1.5; font-size:11px; color: var(--color-muted);">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase (client SDK, compat build for simplicity) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<script>
+// ============================================================================
+// VIEWER SCRIPT - reads shared state from Firebase in real time,
+// sends user actions to the server's API. No simulation logic lives here.
+// ============================================================================
+
+// --- Firebase client config -------------------------------------------------
+// These are PUBLIC, safe-to-expose web app config values (not the admin
+// service account key). Get them from: Firebase Console > Project Settings >
+// General tab > "Your apps" > Web app > SDK setup and configuration.
+const firebaseConfig = {
+  apiKey: "__FIREBASE_API_KEY__",
+  authDomain: "__FIREBASE_AUTH_DOMAIN__",
+  databaseURL: "__FIREBASE_DB_URL__",
+  projectId: "__FIREBASE_PROJECT_ID__"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+let botConfig = { isInitialized: false, maxConcurrentTrades: 4, defaultLeverage: 50, targetTimeframe: "1m", tpPercent: 2.0, slPercent: 0.6 };
+let engineState = { isRunning: false, walletBalance: 10000, positions: [], tradeHistory: [], logs: [], bestTradesBatches: [], signalWeights: {}, patternWeights: {}, strategyStats: {} };
+let scannerSnapshot = { rows: [], scannedCount: 0, signalCount: 0 };
+let rowBeingEdited = null;
+let tradeAssetWatchlist = [];
+
+// ---- BOOTSTRAP --------------------------------------------------------------
+window.addEventListener('DOMContentLoaded', () => {
+  // Live subscriptions - every visitor's browser receives the same updates
+  db.ref('botConfig').on('value', snap => {
+    if (snap.exists()) {
+      botConfig = snap.val();
+      if (botConfig.isInitialized) {
+        document.getElementById('gatekeeper-modal').style.display = 'none';
+        populateLockedLabels();
+      }
+      syncGlobalInterfaceMatrixViewports();
+    }
+  });
+
+  db.ref('engineState').on('value', snap => {
+    if (snap.exists()) {
+      engineState = snap.val();
+      engineState.positions = engineState.positions || [];
+      engineState.tradeHistory = engineState.tradeHistory || [];
+      engineState.logs = engineState.logs || [];
+      engineState.bestTradesBatches = engineState.bestTradesBatches || [];
+      engineState.signalWeights = engineState.signalWeights || {};
+      engineState.patternWeights = engineState.patternWeights || {};
+      engineState.strategyStats = engineState.strategyStats || {};
+      updateMasterSwitchVisual();
+      syncGlobalInterfaceMatrixViewports();
+      renderStrategyIntelligenceMatrixTable();
+      renderDailyLedgerModules();
+      renderBestTradesPane();
+      renderLogsPanel();
+    }
+  });
+
+  db.ref('scannerSnapshot').on('value', snap => {
+    if (snap.exists()) {
+      scannerSnapshot = snap.val();
+      renderScannerTable();
+    }
+  });
+
+  // Pull watchlist once via the API (for the news tab dropdown)
+  fetch('/api/state').then(r => r.json()).then(data => {
+    tradeAssetWatchlist = data.watchlist || [];
+    populateNewsTabUniverse();
+  }).catch(() => {});
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMobileSidebar(); });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    if (touchStartX < 30 && dx > 60) openMobileSidebar();
+    if (dx < -60 && document.getElementById('sidebar-container').classList.contains('mobile-open')) closeMobileSidebar();
+  }, { passive: true });
+});
+
+// ---- INIT MODAL (sends config to server instead of simulating locally) ----
+function calculateHighVelocityTargets() {
+  const leverage = parseInt(document.getElementById('init-leverage').value) || 50;
+  const computedTpMove = (100 / leverage);
+  document.getElementById('auto-roe-text').textContent = `Targeting a ${computedTpMove.toFixed(2)}% real asset price move for 100% ROE at this leverage. Real market timing varies — there is no guaranteed resolution window.`;
+}
+
+function toggleTargetInputFields(mode) {
+  const manualFields = document.getElementById('manual-percentage-inputs-wrapper');
+  const autoExplainer = document.getElementById('auto-roe-explainer');
+  if (mode === 'manual') {
+    manualFields.style.display = 'grid';
+    autoExplainer.style.display = 'none';
+  } else {
+    manualFields.style.display = 'none';
+    autoExplainer.style.display = 'block';
+    calculateHighVelocityTargets();
+  }
+}
+
+async function commitGatekeeperConfigurations() {
+  const payload = {
+    maxConcurrentTrades: document.getElementById('init-max-trades').value,
+    defaultLeverage: document.getElementById('init-leverage').value,
+    targetMode: document.getElementById('init-target-mode').value,
+    manualTp: document.getElementById('init-manual-tp').value,
+    manualSl: document.getElementById('init-manual-sl').value
+  };
+  const res = await fetch('/api/init', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (res.ok) {
+    document.getElementById('gatekeeper-modal').style.display = 'none';
+  } else {
+    alert('Could not initialize the engine. Please try again.');
+  }
+}
+
+function populateLockedLabels() {
+  document.getElementById('side-lbl-max').textContent = `${botConfig.maxConcurrentTrades} Positions`;
+  document.getElementById('side-lbl-lev').textContent = `x${botConfig.defaultLeverage}`;
+  document.getElementById('side-lbl-tf').textContent = `${botConfig.targetTimeframe} (Fast)`;
+  ['top-bar-tf', 'top-bar-tf-short'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = botConfig.targetTimeframe; });
+  document.getElementById('side-lbl-tp').textContent = `+${botConfig.tpPercent.toFixed(2)}%`;
+  document.getElementById('side-lbl-sl').textContent = `-${botConfig.slPercent.toFixed(2)}%`;
+
+  const liveLevInput = document.getElementById('live-leverage');
+  const liveMaxInput = document.getElementById('live-max-trades');
+  const liveTfSelect = document.getElementById('live-timeframe');
+  if (liveLevInput) liveLevInput.value = botConfig.defaultLeverage;
+  if (liveMaxInput) liveMaxInput.value = botConfig.maxConcurrentTrades;
+  if (liveTfSelect) liveTfSelect.value = botConfig.targetTimeframe;
+
+  const universeLbl = document.getElementById('side-lbl-universe');
+  if (universeLbl && tradeAssetWatchlist.length > 0) universeLbl.textContent = `${tradeAssetWatchlist.length} coins`;
+}
+
+// ---- LIVE-ADJUSTABLE CONTROLS (now call the server API) -------------------
+async function applyLiveLeverageChange(value) {
+  const res = await fetch('/api/config/leverage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+  if (!res.ok) populateLockedLabels();
+}
+
+async function applyLiveMaxTradesChange(value) {
+  const res = await fetch('/api/config/max-trades', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+  if (!res.ok) populateLockedLabels();
+}
+
+async function applyLiveTimeframeChange(value) {
+  await fetch('/api/config/timeframe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }) });
+}
+
+async function toggleEngineCoreCycle() {
+  if (!botConfig.isInitialized) return;
+  const res = await fetch('/api/toggle', { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Could not toggle the engine.');
+  }
+  // UI updates automatically via the Firebase listener once the server writes the new state
+}
+
+function updateMasterSwitchVisual() {
+  const btn = document.getElementById('master-switch-node');
+  if (!btn) return;
+  if (engineState.isRunning) {
+    btn.textContent = window.innerWidth < 600 ? "■ Stop" : "■ Suspend Operations Core";
+    btn.className = "btn btn-danger";
+    document.getElementById('engine-hardware-pulse').style.background = "#10b981";
+    document.getElementById('engine-status-text').textContent = "HIGH-FREQUENCY RADAR: SCANNING 1M VELOCITY CHANNELS";
+  } else {
+    btn.textContent = window.innerWidth < 600 ? "▶ Start" : "▶ Start Execution Core";
+    btn.className = "btn btn-success";
+    document.getElementById('engine-hardware-pulse').style.background = "#ef4444";
+    document.getElementById('engine-status-text').textContent = "HIGH-FREQUENCY RADAR: OFFLINE";
+  }
+}
+
+// ---- SIDEBAR / NAV (unchanged UI behavior) ---------------------------------
+function openMobileSidebar() {
+  document.getElementById('sidebar-container').classList.add('mobile-open');
+  document.getElementById('sidebar-backdrop').classList.add('mobile-open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileSidebar() {
+  document.getElementById('sidebar-container').classList.remove('mobile-open');
+  document.getElementById('sidebar-backdrop').classList.remove('mobile-open');
+  document.body.style.overflow = '';
+}
+
+function switchActiveViewPort(navNode) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.view-pane').forEach(v => v.classList.remove('active'));
+  navNode.classList.add('active');
+  document.getElementById(navNode.getAttribute('data-target')).classList.add('active');
+  closeMobileSidebar();
+}
+
+// ---- RENDERING (reads from synced state, never mutates it locally) --------
+function fmtPrice(p) {
+  if (p == null) return '—';
+  return p < 0.001 ? p.toFixed(6) : p < 1 ? p.toFixed(5) : p < 10 ? p.toFixed(4) : p < 1000 ? p.toFixed(3) : p.toFixed(2);
+}
+
+function renderScannerTable() {
+  const tbody = document.getElementById('dashboard-scanner-tbody');
+  if (!tbody) return;
+  const { rows, scannedCount, signalCount } = scannerSnapshot;
+
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--color-muted); padding:30px;">Scanning ${scannedCount || 0} assets... Waiting for signal confluence across indicators.</td></tr>`;
+    return;
+  }
+
+  let html = `<tr style="background:rgba(37,99,235,0.05);"><td colspan="5" style="padding:6px 20px; font-size:10px; color:var(--color-muted);">Scanned <b style="color:#fff;">${scannedCount}</b> assets · <b style="color:#60a5fa;">${signalCount}</b> showing active signals · Showing only coins with real indicator activity</td></tr>`;
+
+  rows.forEach(row => {
+    html += `
+      <tr style="${row.isOnCooldown ? 'opacity:0.5;' : ''}">
+        <td class="text-mono green-text" style="font-weight:700; cursor:pointer;" onclick="displayBlueprintChartViewport('${row.symbol}', 'scanner', '${row.direction}', '${row.indicatorsLabel}', '${row.patternsLabel}', ${row.score})">${row.symbol} ↗</td>
+        <td class="text-mono">${fmtPrice(row.price)}</td>
+        <td style="font-size:11px; color:#94a3b8;">${row.indicatorsLabel} <b style="color:#3b82f6;">(${row.indicatorsPct}%)</b></td>
+        <td class="scanner-col-pattern" style="font-size:11px; color:#c084fc; font-style:italic;">${row.patternsLabel} <b style="color:#a855f7;">(${row.patternsPct}%)</b></td>
+        <td>
+          ${row.isOnCooldown
+            ? `<span style="background:rgba(234,179,8,0.1); color:var(--color-yellow); border:1px solid rgba(234,179,8,0.3); padding:2px 6px; border-radius:4px; font-size:10px; font-weight:700;">COOLDOWN ${row.cooldownRemaining}s</span>`
+            : `<span class="${row.direction === 'Long' ? 'trend-long' : 'trend-short'}">${row.direction} ${row.score}% Score</span>`
+          }
+        </td>
+      </tr>`;
+  });
+
+  tbody.innerHTML = html;
+  const badge = document.getElementById('pos-count-badge');
+  if (badge) badge.textContent = `${engineState.positions.length} open`;
+}
+
+function syncGlobalInterfaceMatrixViewports() {
+  const balEl = document.getElementById('dash-balance');
+  if (balEl) balEl.textContent = `$${(engineState.walletBalance || 0).toFixed(2)}`;
+
+  let compoundPnLSum = 0; let winningTradesCounter = 0;
+  (engineState.tradeHistory || []).forEach(h => { compoundPnLSum += h.pnl; if (h.pnl > 0) winningTradesCounter++; });
+
+  const pnlMetricElement = document.getElementById('dash-pnl');
+  if (pnlMetricElement) {
+    pnlMetricElement.textContent = `${compoundPnLSum >= 0 ? '+' : ''}$${compoundPnLSum.toFixed(2)}`;
+    pnlMetricElement.className = `metric-body ${compoundPnLSum >= 0 ? 'green-text' : 'red-text'}`;
+  }
+
+  const winRate = (engineState.tradeHistory || []).length > 0 ? (winningTradesCounter / engineState.tradeHistory.length) * 100 : 0;
+  const wrEl = document.getElementById('dash-winrate');
+  if (wrEl) wrEl.textContent = `${winRate.toFixed(1)}%`;
+
+  const occEl = document.getElementById('dash-occupancy');
+  if (occEl) occEl.textContent = `${(engineState.positions || []).length} / ${botConfig.maxConcurrentTrades || 0}`;
+
+  const badge = document.getElementById('pos-count-badge');
+  if (badge) badge.textContent = `${(engineState.positions || []).length} open`;
+
+  renderPositionsTable();
+}
+
+function renderPositionsTable() {
+  const tbody = document.getElementById('positions-detailed-tbody');
+  if (!tbody) return;
+
+  const positions = engineState.positions || [];
+  if (positions.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--color-muted); padding:30px;">No open positions actively tracked on the scalper desk network.</td></tr>`;
+    return;
+  }
+
+  let html = '';
+  positions.forEach(pos => {
+    // Without local live prices we show entry as a reasonable fallback;
+    // exact unrealized PnL ticks come from the server's next snapshot.
+    const currentPrice = pos.lastKnownPrice || pos.entryPrice;
+    const rawYield = pos.direction === 'Long' ? (currentPrice - pos.entryPrice) * pos.quantity : (pos.entryPrice - currentPrice) * pos.quantity;
+    const roePercent = (rawYield / pos.margin) * 100;
+    const isEditingThisRow = rowBeingEdited === pos.id;
+    const heldMs = Date.now() - (pos.openTimestampMs || Date.now());
+    const isLocked = heldMs < 60000;
+    const holdStr = formatDurationClient(heldMs);
+
+    html += `
+      <tr>
+        <td class="text-mono" style="font-weight:700; color:#fff;">${pos.symbol}</td>
+        <td><span class="${pos.direction === 'Long' ? 'trend-long' : 'trend-short'}">${pos.direction} x${pos.leverage}</span></td>
+        <td class="text-mono">${fmtPrice(pos.entryPrice)}</td>
+        <td class="text-mono" style="color:var(--color-yellow); font-weight:600;">${fmtPrice(currentPrice)}</td>
+        <td class="text-mono" style="font-size:11px;">
+          ${isLocked
+            ? `<span style="color:var(--color-yellow); font-weight:700;">⏳ ${holdStr}</span><div style="font-size:10px; color:var(--color-muted);">TP/SL locked</div>`
+            : `<span style="color:var(--color-green); font-weight:700;">✓ ${holdStr}</span><div style="font-size:10px; color:var(--color-muted);">Active</div>`}
+        </td>
+        <td class="text-mono">
+          <div>Margin: <b style="color:#fff;">${pos.margin.toFixed(2)} USDT</b></div>
+          <div style="font-size:10px; color:var(--color-muted);">Notional: ${pos.notional.toFixed(2)} USDT</div>
+          <div style="font-size:10px; color:var(--color-muted);">Qty: ${pos.quantity}</div>
+        </td>
+        <td class="text-mono"><span class="${rawYield >= 0 ? 'green-text' : 'red-text'}">${rawYield.toFixed(2)} USDT (${roePercent.toFixed(1)}%)</span></td>
+        <td>
+          ${isEditingThisRow ? `
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; gap:4px; align-items:center;">
+                <span class="green-text" style="font-size:10px; width:28px;">TP</span>
+                <input type="number" step="any" class="control-field" style="padding:3px 6px; font-size:11px;" id="edit-tp-${pos.id}" value="${pos.tp}">
+              </div>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <span class="red-text" style="font-size:10px; width:28px;">SL</span>
+                <input type="number" step="any" class="control-field" style="padding:3px 6px; font-size:11px;" id="edit-sl-${pos.id}" value="${pos.sl}">
+              </div>
+              <div style="display:flex; gap:4px; align-items:center;">
+                <span style="font-size:10px; width:28px; color:var(--color-muted);">LEV</span>
+                <input type="number" step="1" min="1" max="125" class="control-field" style="padding:3px 6px; font-size:11px;" id="edit-lev-${pos.id}" value="${pos.leverage}">
+              </div>
+              <div style="display:flex; gap:4px; margin-top:2px;">
+                <button class="btn btn-success" style="padding:3px 8px; font-size:10px; flex:1;" onclick="saveManualPositionEdits('${pos.id}')">Save</button>
+                <button class="btn btn-secondary" style="padding:3px 8px; font-size:10px; flex:1;" onclick="cancelManualPositionEdits()">Cancel</button>
+              </div>
+            </div>
+          ` : `
+            <div style="font-family:var(--font-mono); font-size:11px; margin-bottom: 2px;">
+              <span class="green-text" style="background: rgba(16,185,129,0.08); padding: 2px 4px; border-radius:3px;">TP: ${fmtPrice(pos.tp)}</span>
+              <span class="red-text" style="background: rgba(239,68,68,0.08); padding: 2px 4px; border-radius:3px; margin-left:2px;">SL: ${fmtPrice(pos.sl)}</span>
+            </div>
+          `}
+        </td>
+        <td style="text-align:center;">
+          <div style="display:flex; flex-direction:column; gap:4px; align-items:center;">
+            <button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; font-weight:600; width:100%;" onclick="displayBlueprintChartViewport('${pos.symbol}', 'active_position', '${pos.direction}', '${(pos.signalsUsed||[]).join(', ')}', '${(pos.patternsUsed||[]).join(', ')}', ${pos.scoreIndex}, ${pos.entryPrice}, ${pos.tp}, ${pos.sl})">Chart</button>
+            ${!isEditingThisRow ? `<button class="btn btn-secondary" style="padding:4px 10px; font-size:11px; font-weight:600; width:100%;" onclick="beginManualPositionEdits('${pos.id}')">Edit TP/SL/Lev</button>` : ``}
+            <button class="btn btn-danger" style="padding:4px 10px; font-size:11px; font-weight:600; width:100%;" onclick="closePositionManually('${pos.id}')">Close</button>
+          </div>
+        </td>
+      </tr>`;
+  });
+  tbody.innerHTML = html;
+}
+
+function formatDurationClient(ms) {
+  if (ms < 0) ms = 0;
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function beginManualPositionEdits(positionId) { rowBeingEdited = positionId; renderPositionsTable(); }
+function cancelManualPositionEdits() { rowBeingEdited = null; renderPositionsTable(); }
+
+async function saveManualPositionEdits(positionId) {
+  const tp = document.getElementById(`edit-tp-${positionId}`).value;
+  const sl = document.getElementById(`edit-sl-${positionId}`).value;
+  const leverage = document.getElementById(`edit-lev-${positionId}`).value;
+  const res = await fetch(`/api/position/${positionId}/edit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tp, sl, leverage }) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Edit rejected.');
+    return;
+  }
+  rowBeingEdited = null;
+}
+
+async function closePositionManually(positionId) {
+  await fetch(`/api/position/${positionId}/close`, { method: 'POST' });
+}
+
+function renderStrategyIntelligenceMatrixTable() {
+  const sigBody = document.getElementById('matrix-signals-tbody');
+  const patBody = document.getElementById('matrix-patterns-tbody');
+  if (!sigBody || !patBody) return;
+
+  let signalsHtml = '';
+  Object.keys(engineState.signalWeights || {}).forEach(k => {
+    const stats = engineState.strategyStats[k] || { wins: 0, total: 0 };
+    const wr = stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : "0.0";
+    signalsHtml += `<tr><td class="text-mono" style="color:#fff;">#${k}</td><td class="text-mono">${wr}% (${stats.wins}/${stats.total})</td><td class="text-mono green-text">${engineState.signalWeights[k]}</td></tr>`;
+  });
+  sigBody.innerHTML = signalsHtml;
+
+  let patternsHtml = ''; let leadingKey = "threeBlackCrows"; let maxWeight = 0;
+  Object.keys(engineState.patternWeights || {}).forEach(k => {
+    const stats = engineState.strategyStats[k] || { wins: 0, total: 0 };
+    const wr = stats.total > 0 ? ((stats.wins / stats.total) * 100).toFixed(1) : "0.0";
+    if (engineState.patternWeights[k] > maxWeight) { maxWeight = engineState.patternWeights[k]; leadingKey = k; }
+    patternsHtml += `<tr><td class="text-mono" style="color:#c084fc;">#${k}</td><td class="text-mono">${wr}% (${stats.wins}/${stats.total})</td><td class="text-mono green-text">${engineState.patternWeights[k]}</td></tr>`;
+  });
+  patBody.innerHTML = patternsHtml;
+
+  const box = document.getElementById('intelligence-rationale-box');
+  if (box) {
+    box.innerHTML = `
+      HIGHEST SCALPER FEEDBACK LOOP STRUCTURE: <span style="color:#fff; font-weight:700;">${leadingKey.toUpperCase()}</span><br>
+      DYNAMIC BIAS WEIGHT CORRECTION: <span style="color:var(--color-yellow); font-weight:700;">${maxWeight.toFixed(2)} Index units</span><br><br>
+      HIGH REFRESH SCALPING ADAPTATION: The system recalculates real EMA/RSI/MACD/Bollinger/volume indicators from live Binance candle data every cycle, and reweights each indicator/pattern based on its actual historical win rate.
+    `;
+  }
+}
+
+function renderDailyLedgerModules() {
+  const container = document.getElementById('daily-ledger-canvas-container');
+  if (!container) return;
+
+  const history = engineState.tradeHistory || [];
+  if (history.length === 0) {
+    container.innerHTML = `
+      <div class="table-panel">
+        <div class="table-header-title">Historical Operational Log Ledger Statements</div>
+        <div style="padding:40px; text-align:center; color:var(--color-muted);">No finalized trading statements logged yet. Keep engine running to stack data...</div>
+      </div>`;
+    return;
+  }
+
+  let buckets = {};
+  history.forEach(t => {
+    const key = t.dateStr || new Date().toLocaleDateString();
+    if (!buckets[key]) buckets[key] = { ops: [], wins: 0, losses: 0, volume: 0, pnl: 0 };
+    buckets[key].ops.push(t);
+    buckets[key].volume += t.volume;
+    buckets[key].pnl += t.pnl;
+    if (t.pnl > 0) buckets[key].wins++; else buckets[key].losses++;
+  });
+
+  let html = '';
+  Object.keys(buckets).sort((a, b) => new Date(b) - new Date(a)).forEach(dateKey => {
+    const b = buckets[dateKey];
+    html += `
+      <div class="table-panel">
+        <div class="table-header-title" style="background:#111622; color:#fff;">
+          <span>📋 Fast Scalper Ledger Workspace: <b style="font-family:var(--font-mono); color:var(--color-accent);">${dateKey}</b></span>
+        </div>
+        <div class="daily-summary-bar">
+          <div><span class="control-label">Total Volume Trades</span><br><b style="font-size:14px; font-family:var(--font-mono); color:#fff;">${b.ops.length} Positions</b></div>
+          <div><span class="control-label">Profitable Terminations</span><br><b style="font-size:14px; font-family:var(--font-mono); color:var(--color-green);">${b.wins} Wins</b></div>
+          <div><span class="control-label">Contained Losses</span><br><b style="font-size:14px; font-family:var(--font-mono); color:var(--color-red);">${b.losses} Losses</b></div>
+          <div><span class="control-label">Aggregate Volume</span><br><b style="font-size:14px; font-family:var(--font-mono); color:#fff;">$${b.volume.toFixed(2)}</b></div>
+          <div><span class="control-label">Net Performance Delta</span><br><b style="font-size:14px; font-family:var(--font-mono);" class="${b.pnl >= 0 ? 'green-text' : 'red-text'}">${b.pnl >= 0 ? '+' : ''}$${b.pnl.toFixed(2)}</b></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Opened</th><th>Closed</th><th>Duration</th><th>Asset Pair</th><th>Direction</th>
+              <th>Entry → Exit</th><th>Margin / Lev</th><th class="ledger-col-notional">Notional</th>
+              <th>Realized PnL</th><th>Exit Reason</th><th style="text-align:right;">Audit</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${b.ops.map(t => `
+              <tr>
+                <td class="text-mono" style="color:var(--color-muted); white-space:nowrap;">${t.openTimestampStr || t.timestamp}</td>
+                <td class="text-mono" style="color:var(--color-muted); white-space:nowrap;">${t.timestamp}</td>
+                <td class="text-mono" style="color:var(--color-yellow); white-space:nowrap;">${t.durationStr || '—'}</td>
+                <td class="text-mono" style="font-weight:700; color:#fff;">${t.symbol}</td>
+                <td><span class="${t.direction === 'Long' ? 'trend-long' : 'trend-short'}">${t.direction}</span></td>
+                <td class="text-mono" style="font-size:11px;">
+                  <div>In: <span style="color:#fff;">${fmtPrice(t.entryPrice)}</span></div>
+                  <div>Out: <span style="color:var(--color-yellow);">${fmtPrice(t.exitPrice)}</span></div>
+                </td>
+                <td class="text-mono" style="font-size:11px;">
+                  <div><b style="color:#fff;">${t.margin != null ? t.margin.toFixed(2) : '—'} USDT</b></div>
+                  <div style="color:var(--color-muted);">x${t.leverage}</div>
+                </td>
+                <td class="text-mono ledger-col-notional" style="color:var(--color-muted); font-size:11px;">${t.volume != null ? '$' + t.volume.toFixed(2) : '—'}</td>
+                <td class="text-mono ${t.pnl >= 0 ? 'green-text' : 'red-text'}" style="font-weight:700;">${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} USDT</td>
+                <td style="color:var(--color-muted); font-size:11px; max-width:180px;">${t.reason}</td>
+                <td style="text-align:right;">
+                  <button class="btn btn-secondary" style="padding:2px 8px; font-size:10px;" onclick="displayBlueprintChartViewport('${t.symbol}', 'archive', '${t.direction}', '${(t.snapshot.signalsUsed||[]).join(', ')}', '${(t.snapshot.patternsUsed||[]).join(', ')}', ${t.snapshot.scoreIndex}, ${t.snapshot.entryPrice}, ${t.snapshot.tp}, ${t.snapshot.sl})">Chart</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderBestTradesPane() {
+  const statusText = document.getElementById('best-trades-status-text');
+  const summaryWrap = document.getElementById('best-trades-summary-wrap');
+  if (!statusText || !summaryWrap) return;
+
+  const totalCompleted = (engineState.tradeHistory || []).length;
+  const batches = engineState.bestTradesBatches || [];
+
+  if (batches.length === 0) {
+    const progressVal = totalCompleted % 20;
+    statusText.innerHTML = `Awaiting at least 20 completed trades before generating the best-indicator breakdown. Progress: <b>${progressVal}</b> / 20 trades.`;
+    summaryWrap.style.display = 'none';
+    return;
+  }
+
+  statusText.innerHTML = `Analysis active. <b>${batches.length}</b> checkpoint batch(es) generated across <b>${totalCompleted}</b> total completed trades. A new batch report is appended every 20 trades.`;
+  summaryWrap.style.display = 'flex';
+
+  const latest = batches[0];
+
+  document.getElementById('best-trades-stats-grid').innerHTML = `
+    <div class="card-metric"><div class="metric-head">Latest Batch Win Rate</div><div class="metric-body">${latest.winRate.toFixed(1)}%</div></div>
+    <div class="card-metric"><div class="metric-head">Latest Batch Net PnL</div><div class="metric-body ${latest.netPnl >= 0 ? 'green-text' : 'red-text'}">${latest.netPnl >= 0 ? '+' : ''}$${latest.netPnl.toFixed(2)}</div></div>
+    <div class="card-metric"><div class="metric-head">Best Indicator (Latest Batch)</div><div class="metric-body" style="font-size:16px; color:#3b82f6;">${latest.bestIndicator.toUpperCase()}</div></div>
+    <div class="card-metric"><div class="metric-head">Best Pattern (Latest Batch)</div><div class="metric-body" style="font-size:16px; color:#c084fc;">${latest.bestPattern.toUpperCase()}</div></div>
+  `;
+
+  const verdictFor = (winRate, total) => {
+    if (total === 0) return '<span style="color:var(--color-muted);">No data</span>';
+    if (winRate >= 65) return '<span class="green-text">Strong winner</span>';
+    if (winRate >= 50) return '<span style="color:var(--color-yellow);">Moderate edge</span>';
+    return '<span class="red-text">Weak / avoid</span>';
+  };
+
+  document.getElementById('best-indicators-tbody').innerHTML = latest.rankedIndicators.map(row => `
+    <tr><td class="text-mono" style="color:#fff;">#${row.key}</td><td class="text-mono green-text">${row.winRate.toFixed(1)}%</td><td class="text-mono">${row.wins} / ${row.total}</td><td>${verdictFor(row.winRate, row.total)}</td></tr>
+  `).join('') || `<tr><td colspan="4" style="text-align:center; color:var(--color-muted);">No indicator data in this batch.</td></tr>`;
+
+  document.getElementById('best-patterns-tbody').innerHTML = latest.rankedPatterns.map(row => `
+    <tr><td class="text-mono" style="color:#c084fc;">#${row.key}</td><td class="text-mono green-text">${row.winRate.toFixed(1)}%</td><td class="text-mono">${row.wins} / ${row.total}</td><td>${verdictFor(row.winRate, row.total)}</td></tr>
+  `).join('') || `<tr><td colspan="4" style="text-align:center; color:var(--color-muted);">No pattern data in this batch.</td></tr>`;
+
+  document.getElementById('best-batches-tbody').innerHTML = batches.map(batch => `
+    <tr>
+      <td class="text-mono" style="color:#fff;">#${batch.batchNumber}</td>
+      <td class="text-mono">Trades up to #${batch.tradesCovered}</td>
+      <td class="text-mono ${batch.winRate >= 50 ? 'green-text' : 'red-text'}">${batch.winRate.toFixed(1)}%</td>
+      <td class="text-mono ${batch.netPnl >= 0 ? 'green-text' : 'red-text'}">${batch.netPnl >= 0 ? '+' : ''}$${batch.netPnl.toFixed(2)}</td>
+      <td style="color:#3b82f6; font-weight:600;">${batch.bestIndicator.toUpperCase()}</td>
+      <td style="color:#c084fc; font-weight:600;">${batch.bestPattern.toUpperCase()}</td>
+    </tr>
+  `).join('');
+}
+
+function renderLogsPanel() {
+  const box = document.getElementById('console-stream-box');
+  if (!box) return;
+  const logs = engineState.logs || [];
+  box.innerHTML = logs.map(l => `
+    <div style="margin-bottom:4px;">
+      <span style="color:var(--color-muted);">[${l.time}]</span>
+      <span style="color:var(--color-accent); font-weight:600;">#${l.tag}</span>
+      <span style="color:#e2e8f0;">${l.info}</span>
+    </div>`).join('');
+}
+
+// ---- NEWS TAB (static research links - unchanged) --------------------------
+function buildNewsCoinLinks(symbol) {
+  const baseAsset = symbol.replace('USDT', '');
+  const encoded = encodeURIComponent(baseAsset);
+  return [
+    { name: '📰 CoinDesk', desc: `Latest ${baseAsset} news from CoinDesk`, url: `https://www.coindesk.com/search?s=${encoded}`, color: 'rgba(37,99,235,0.2)', textColor: '#60a5fa' },
+    { name: '📡 Cointelegraph', desc: `${baseAsset} tag page on Cointelegraph`, url: `https://cointelegraph.com/tags/${baseAsset.toLowerCase()}`, color: 'rgba(37,99,235,0.2)', textColor: '#60a5fa' },
+    { name: '🔗 The Block', desc: `${baseAsset} coverage on The Block`, url: `https://www.theblock.co/search#q=${encoded}`, color: 'rgba(37,99,235,0.2)', textColor: '#60a5fa' },
+    { name: '📈 Coinglass OI', desc: `${baseAsset} open interest & funding rate`, url: `https://www.coinglass.com/FundingRate`, color: 'rgba(16,185,129,0.2)', textColor: 'var(--color-green)' },
+    { name: '🔍 Google News', desc: `${baseAsset} crypto news aggregated`, url: `https://news.google.com/search?q=${encoded}%20crypto`, color: 'rgba(234,179,8,0.15)', textColor: 'var(--color-yellow)' },
+    { name: '🐦 X / Twitter (verify independently)', desc: `Live $${baseAsset} mentions — treat unverified calls as adversarial`, url: `https://twitter.com/search?q=%24${encoded}&f=live`, color: 'rgba(239,68,68,0.1)', textColor: '#f87171' }
+  ];
+}
+
+function renderNewsTabLinksForSymbol(symbol) {
+  const wrap = document.getElementById('news-source-links');
+  if (!wrap) return;
+  wrap.innerHTML = buildNewsCoinLinks(symbol).map(link => `
+    <a href="${link.url}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.03); border:1px solid ${link.color}; border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+      <span style="color:${link.textColor}; font-weight:700; font-size:12px;">↗ ${link.name}</span>
+      <span style="color:var(--color-muted); font-size:11px;">${link.desc}</span>
+    </a>
+  `).join('');
+}
+
+function populateNewsTabUniverse() {
+  const select = document.getElementById('news-symbol-select');
+  const generalWrap = document.getElementById('news-general-links');
+  if (select && tradeAssetWatchlist.length > 0) {
+    select.innerHTML = tradeAssetWatchlist.map(s => `<option value="${s}">${s}</option>`).join('');
+    select.onchange = () => renderNewsTabLinksForSymbol(select.value);
+    renderNewsTabLinksForSymbol(select.value);
+  }
+  if (generalWrap) {
+    const generalLinks = [
+      { name: '📰 CoinDesk — Markets', desc: 'Top crypto market news and analysis', url: 'https://www.coindesk.com/markets/', color: 'rgba(37,99,235,0.2)', textColor: '#60a5fa' },
+      { name: '📡 Cointelegraph — Latest', desc: 'Breaking crypto news feed', url: 'https://cointelegraph.com/', color: 'rgba(37,99,235,0.2)', textColor: '#60a5fa' },
+      { name: '🔗 The Block — Latest', desc: 'In-depth crypto journalism and data', url: 'https://www.theblock.co/latest', color: 'rgba(37,99,235,0.2)', textColor: '#60a5fa' },
+      { name: '📊 Decrypt — News', desc: 'Accessible crypto news for all levels', url: 'https://decrypt.co/news', color: 'rgba(234,179,8,0.2)', textColor: 'var(--color-yellow)' },
+      { name: '💹 Binance News', desc: 'Official Binance announcements and listings', url: 'https://www.binance.com/en/support/announcement', color: 'rgba(234,179,8,0.2)', textColor: 'var(--color-yellow)' },
+      { name: '🔥 Messari — Research', desc: 'Institutional-grade crypto research and on-chain data', url: 'https://messari.io/research', color: 'rgba(16,185,129,0.2)', textColor: 'var(--color-green)' }
+    ];
+    generalWrap.innerHTML = generalLinks.map(link => `
+      <a href="${link.url}" target="_blank" rel="noopener noreferrer" style="background:rgba(255,255,255,0.03); border:1px solid ${link.color}; border-radius:8px; padding:14px; text-decoration:none; display:flex; flex-direction:column; gap:4px;">
+        <span style="color:${link.textColor}; font-weight:700; font-size:12px;">↗ ${link.name}</span>
+        <span style="color:var(--color-muted); font-size:11px;">${link.desc}</span>
+      </a>
+    `).join('');
+  }
+}
+
+// ---- CHART MODAL (unchanged UI behavior, reads from synced botConfig) -----
+function mapTimeframeToTradingViewInterval(tf) {
+  const map = { '1m': '1', '3m': '3', '5m': '5', '15m': '15', '30m': '30', '1h': '60' };
+  return map[tf] || '1';
+}
+
+function displayBlueprintChartViewport(symbol, mode, side, indString, patString, scoreValue, customEntry, customTp, customSl) {
+  const fmtPriceModal = (p) => p == null ? '—' : p < 0.0001 ? p.toPrecision(4) : p < 0.001 ? p.toPrecision(5) : p < 0.1 ? p.toPrecision(5) : p < 10 ? p.toFixed(4) : p < 1000 ? p.toFixed(3) : p.toFixed(2);
+  document.getElementById('modal-chart-heading').textContent = `Live Horizon Verification Matrix -> BINANCE:${symbol}.P [Timeframe: ${botConfig.targetTimeframe} High Frequency Focus]`;
+
+  const referenceBasisPriceValue = customEntry || 100.00;
+  const computedTp = customTp || (side === 'Long' ? referenceBasisPriceValue * (1 + (botConfig.tpPercent / 100)) : referenceBasisPriceValue * (1 - (botConfig.tpPercent / 100)));
+  const computedSl = customSl || (side === 'Long' ? referenceBasisPriceValue * (1 - (botConfig.slPercent / 100)) : referenceBasisPriceValue * (1 + (botConfig.slPercent / 100)));
+
+  document.getElementById('bp-entry').textContent = `${fmtPriceModal(referenceBasisPriceValue)} USDT`;
+  document.getElementById('bp-sl').textContent = `${fmtPriceModal(computedSl)} USDT`;
+  document.getElementById('bp-tp').textContent = `${fmtPriceModal(computedTp)} USDT`;
+
+  const indicatorsArr = indString.split(', ');
+  const patternsArr = patString.split(', ');
+
+  let html = `<ul style="padding-left: 14px; margin: 0; display:flex; flex-direction:column; gap:6px;">`;
+  html += `<li>Confluence score verified at an optimized index rating of <b>${scoreValue}%</b>.</li>`;
+  html += `<li><b>80% Weight Base:</b> Technical indicators signaled key breakout alignments: <span style="color:#3b82f6; font-weight:600;">${indicatorsArr.join(' & ')}</span>.</li>`;
+  if (patString && patString !== 'NONE') {
+    html += `<li><b>20% Weight Pattern Base:</b> High-velocity candlestick patterns verified: <span style="color:#c084fc; font-weight:600; font-style:italic;">${patternsArr.join(' & ')}</span>.</li>`;
+  }
+  html += `<li><b>Timeframe constraint confirmation:</b> Designed for a tight <b>5 to 10 minute completion turn</b> using compressed profit boundary targets (${botConfig.tpPercent.toFixed(2)}% asset change capacity).</li>`;
+  html += `</ul>`;
+
+  document.getElementById('bp-trade-reasons').innerHTML = html;
+  document.getElementById('bp-convergences').textContent = `[DESK INDEX CONTEXT: ${mode.toUpperCase()}] Technical indicator calculation blocks: [${indString}]. Visual pattern layers validated: [${patString}].`;
+
+  const iframeTarget = document.getElementById('iframe-mount-target');
+  iframeTarget.innerHTML = `
+    <iframe style="width:100%; height:100%; border:none;"
+            src="https://s.tradingview.com/widgetembed/?symbol=BINANCE:${symbol}.P&interval=${mapTimeframeToTradingViewInterval(botConfig.targetTimeframe)}&theme=dark&style=1">
+    </iframe>`;
+
+  document.getElementById('chart-viewport-modal').style.display = 'flex';
+}
+
+function dismissModalViewport() {
+  document.getElementById('chart-viewport-modal').style.display = 'none';
+  document.getElementById('iframe-mount-target').innerHTML = '';
+}
+</script>
+</body>
+</html>

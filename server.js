@@ -17,7 +17,41 @@ const admin = require('firebase-admin');
 // contents of the downloaded JSON key, as a single-line string.
 // FIREBASE_DB_URL is the https://xxx.firebaseio.com URL from your console.
 // ---------------------------------------------------------------------------
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+// The Firebase service account JSON is too long for a single environment
+// variable on some hosts (Back4App caps name+value at 1023 chars). Rather
+// than splitting the whole JSON blob at arbitrary points, we use Firebase's
+// individual-field init (project_id / client_email / private_key) and only
+// split the one long field (private_key) into 2 parts. This is much less
+// error-prone than splitting raw JSON.
+function loadServiceAccountFromEnv() {
+  // Preferred path: a full JSON blob in one var (works on hosts without the
+  // 1023-char limit, e.g. Render).
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
+
+  // Split-field path (for Back4App and similar hosts with short var limits).
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = [
+    process.env.FIREBASE_PRIVATE_KEY_PART1,
+    process.env.FIREBASE_PRIVATE_KEY_PART2,
+    process.env.FIREBASE_PRIVATE_KEY_PART3 // extra slot, usually unused
+  ].filter(Boolean).join('');
+
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error('Missing Firebase credentials. Set either FIREBASE_SERVICE_ACCOUNT (full JSON), or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY_PART1/2.');
+  }
+
+  return {
+    project_id: projectId,
+    client_email: clientEmail,
+    // Env vars store literal "\n" as two characters; convert back to real newlines.
+    private_key: privateKey.replace(/\\n/g, '\n')
+  };
+}
+
+const serviceAccount = loadServiceAccountFromEnv();
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
